@@ -26,6 +26,7 @@ Fernando Rosas & Pedro Mediano, March 2023
 #######################################################
 import numpy as np
 import pandas as pd
+import os
 
 # Java-related commands
 import jpype as jp
@@ -82,6 +83,7 @@ def ctw_entropy(X, Y=None, vmm_order=30):
     ab_size = len(alphabet) # count how many different symbols are (usually 2)
     ab_dict = {cc: i for cc,i in zip(sorted(alphabet), range(ab_size))}
 
+
     # Initialise and train the probabilistic model
     vmm = jp.JPackage('vmm.algs').DCTWPredictor()
     vmm.init(ab_size, vmm_order)
@@ -123,11 +125,12 @@ def quantize_df(data):
 # Example of HR entropy estimation
 ####################################
 if __name__ == '__main__':
-    
-    filenames = ['1_ECG_Misia_main','2_ECG_Michal_main']
-    filenames_est = [f"data/hr_estimations/{f}_r_peaks_hr_estimation.csv" for f in filenames]
-    filenames_baysian = [f'{f.split(".csv")[0]}_bayes_hr.csv'for f in filenames_est] 
+    script_dir = os.path.dirname(os.path.realpath(__file__))
 
+    filenames = ['1_ECG_Misia_main','2_ECG_Michal_main']
+    filenames_est = [f"data\hr_estimations\{f}_r_peaks_hr_estimation.csv" for f in filenames]
+    filenames_baysian = [f'{f.split(".csv")[0]}_bayes_hr.csv'for f in filenames_est] 
+    
 
     for f in filenames_baysian:
         data = pd.read_csv(f, index_col=0)
@@ -138,8 +141,6 @@ if __name__ == '__main__':
         mean_h = h.mean()
         print(f'Average HR entropy for {f}: ', h.mean())
 
-
-    # An example from the authors:
 
     # # Load Bayesian estimations
     # data = pd.read_csv('data/example/bayes_hr.csv', index_col=0)

@@ -4,6 +4,8 @@ author: "MW"
 output:
   html_document: default
   pdf_document: default
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -328,6 +330,82 @@ ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
   
 
 
+```
+
+```{r}
+plot(df$systemTime,df$QuestionIndex)
+```
+
+#### Arranging event markers
+```{r}
+ecgData <- read.csv("data/1_ECG_Misia_main.csv")
+change_rows <- which(ecgData$EVENT == 4 & dplyr::lead(ecgData$EVENT) == 8)
+result <- ecgData[change_rows, ]
+
+baseTime = df$systemTime[1]
+
+sampling_rate <- 1000 # 1000 Hz means 1 sample per millisecond
+
+ids_shifted = as.numeric(rownames(result))
+ids_shifted = ids_shifted - ids_shifted[1]
+
+systemTime_result = (ids_shifted/sampling_rate)+baseTime
+
+result$systemTime <- systemTime_result
+
+```
+
+
+```{r}
+# Find the rows where either VideoName or VideoMode changed
+changed_rows <- df %>%
+  mutate(
+    VideoNameChange = VideoName != lag(VideoName, default = first(VideoName)),
+    VideoModeChange = VideoMode != lag(VideoMode, default = first(VideoMode))
+  ) %>%
+  filter(VideoNameChange | VideoModeChange)
+
+
+plot(df$systemTime,df$QuestionIndex)
+
+
+```
+
+```{r}
+
+# Find the indices of non-zero EVENT values
+non_zero_indices <- which(ecgData$EVENT != 0)
+
+# Get the first and last index of non-zero values
+first_non_zero <- min(non_zero_indices)
+last_non_zero <- max(non_zero_indices)
+
+# Subset the dataframe to keep only the rows between the first and last non-zero indices
+ecgData_cleaned <- ecgData[first_non_zero:last_non_zero, ]
+
+baseTime = df$systemTime
+
+sampling_rate <- 1000 # 1000 Hz means 1 sample per millisecond
+time_increment <- 1/sampling_rate
+
+rownames(ecgData_cleaned) <- seq_len(nrow(ecgData_cleaned))
+
+ecgData_cleaned$systemTime <- baseTime + seq(0, by = time_increment, length.out = nrow(ecgData_cleaned))
+
+
+unique_consecutive <- rle(ecgData_cleaned$EVENT)$values
+
+rows_changed_to_4_or_8 <- which((ecgData_cleaned$EVENT == 4 & lag(ecgData_cleaned$EVENT) != 4) | (ecgData_cleaned$EVENT == 8 & lag(ecgData_cleaned$EVENT) != 8))
+
+video_changed_or_stoped <- ecgData_cleaned[rows_changed_to_4_or_8, ]
+video_changed_or_stoped
+
+plot(ecgData_cleaned$EVENT)
+
+
+```
+```{r}
+plot(ecgData_cleaned$systemTime, ecgData_cleaned$EVENT)
 ```
 
 ### Michał
