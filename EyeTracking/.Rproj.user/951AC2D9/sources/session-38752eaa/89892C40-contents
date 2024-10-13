@@ -265,20 +265,20 @@ deviceData <- deviceData %>%
   )
 
 
-df <- deviceData %>% select_if(~ !any(is.na(.)))
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
 
 
 # Convert the systemTime column to relative time
-df$relative_time <- (df$systemTime - min(df$systemTime)) 
-df <- df[!duplicated(df$relative_time), ]
+deviceData$relative_time <- (deviceData$systemTime - min(deviceData$systemTime)) 
+deviceData <- deviceData[!duplicated(deviceData$relative_time), ]
 
-df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
-df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+deviceData$RightEyePupilSize[deviceData$RightEyePupilSize == -1] <- NA
+deviceData$LeftEyePupilSize[deviceData$LeftEyePupilSize == -1] <- NA
 
 
 
 # Apply approx function to the pupil size columns
-df <- df %>%
+deviceData <- deviceData %>%
   arrange(relative_time) %>%
   mutate(
     RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
@@ -305,11 +305,11 @@ where_film_mode_changed <-function(df) {
 }
 
 #where movie or its mode changed
-movie_changed = where_film_mode_changed(df)
+movie_changed = where_film_mode_changed(deviceData)
 
 
 # Create a line plot with smoothing for both eyes
-ggplot(df, aes(x = relative_time)) +
+ggplot(deviceData, aes(x = relative_time)) +
   geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
   geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
   labs(title = "Smoothed Pupil Size Over Time",
@@ -321,14 +321,14 @@ ggplot(df, aes(x = relative_time)) +
 
 
 # Calculate the average pupil size
-df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+deviceData$average_pupil_size <- rowMeans(deviceData[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
 
 
 
 
 # Create a line plot for the average pupil size
 # removed vlines as no spawnData was identified
-ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+ggplot(deviceData, aes(x = relative_time, y = average_pupil_size)) +
   geom_line(color = "purple") +
   labs(title = "Average Pupil Size Over Time",
        x = "Relative Time", y = "Average Pupil Size")+
@@ -336,8 +336,10 @@ ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
  # +geom_text(data = changes_rows, aes(x = relative_time, y = 0.0, label = changes_rows$VideoName), 
            # angle = 90, vjust = -0.5, color = "darkgreen", size = 3)
   
+```
 
-
+```{r}
+ecgData <- read.csv("data/1_ECG_Misia_main.csv")
 ```
 
 ##### Aranging events from ECG
@@ -346,9 +348,8 @@ ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
 2.  Adding \$system_time to ecgData based on the device data start and the sampling rate
 
 ```{r}
-ecgData <- read.csv("data/1_ECG_Misia_main.csv")
 
-clean_and_add_time_to_ecg <- function(ecgData)  {
+clean_and_add_time_to_ecg <- function(ecgData, baseTime)  {
   
   # Find the indices of non-zero EVENT values
   non_zero_indices <- which(ecgData$EVENT != 0)
@@ -359,9 +360,7 @@ clean_and_add_time_to_ecg <- function(ecgData)  {
   # Subset the dataframe to keep only the rows between the first and last non-zero indices
   ecgData_cleaned <- ecgData[first_non_zero:last_non_zero, ]
   
-  
-  baseTime = df$systemTime[1] # the start of vr session
-  
+
   sampling_rate <- 1000 # 1000 Hz means 1 sample per millisecond
   time_increment <- 1/sampling_rate
   rownames(ecgData_cleaned) <- seq_len(nrow(ecgData_cleaned))
@@ -369,14 +368,17 @@ clean_and_add_time_to_ecg <- function(ecgData)  {
   ecgData_cleaned$systemTime <- baseTime + seq(0, by = time_increment, length.out = nrow(ecgData_cleaned))
   return(ecgData_cleaned)
 }
-
-
-ecgData_cleaned <- clean_and_add_time_to_ecg(ecgData)
 ```
 
-##### Calculating time from device data
+```{r}
+ecgData <- clean_and_add_time_to_ecg(ecgData,deviceData$systemTime[1])
+```
+
+##### Event changed based on ECG data
 
 ```{r}
+
+# df should be ECG data
 
 when_event_changed <- function(df) {
     result <- df %>%
@@ -407,7 +409,7 @@ when_event_changed(ecgData_cleaned)
 ##### Segment change based on deviceData
 
 ```{r}
-
+# df should be device data
 when_segment_changed <- function(df) {
   result <- df %>%
     mutate(segment_changed = (SegmentIndex != lag(SegmentIndex))) %>%
@@ -415,7 +417,67 @@ when_segment_changed <- function(df) {
   
   return(result$systemTime)
 }
-when_segment_changed(df)
+when_segment_changed(deviceData)
+```
+
+##### Movie mode changed based on Device Data
+
+```{r}
+# Function that takes deviceData df and returns a frame with rows, when the VideoMode/Video changed 
+when_movie_mode_changed <-function(df) {
+  # Find changes in VideoName
+  name_changes <- c(FALSE, df$VideoName[-1] != df$VideoName[-nrow(df)])
+  # Find changes in VideoMode
+  mode_changes <- c(FALSE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
+  # Combine the two logical vectors
+  changes <- name_changes | mode_changes
+  
+  # Get the indices where changes occur
+  change_indices <- which(changes)
+  
+  changes_rows <- df[change_indices,]
+  return(changes_rows)
+}
+
+when_movie_mode_changed(deviceData)$systemTime
+```
+
+```{r}
+when_movie_mode_changed_ext <- function(df) {
+  # Ensure df has the necessary columns
+  if (!all(c("systemTime", "VideoName", "VideoMode") %in% colnames(df))) {
+    stop("Data frame must contain 'systemTime', 'VideoName', and 'VideoMode' columns.")
+  }
+  
+  # Find changes in VideoName
+  name_changes <- c(FALSE, df$VideoName[-1] != df$VideoName[-nrow(df)])
+  # Find changes in VideoMode
+  mode_changes <- c(FALSE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
+  
+  # Get the indices where changes occur
+  name_change_indices <- which(name_changes)
+  mode_change_indices <- which(mode_changes)
+  
+  print(name_change_indices)
+  print(mode_change_indices)
+  
+  # Create data for VideoName changes
+  name_changes_rows <- data.frame(
+    systemTime = df$systemTime[name_change_indices],
+    type = "moviename",
+    name = df$VideoName[name_change_indices],
+    mode = df$VideoMode[name_change_indices],
+
+    stringsAsFactors = FALSE
+  )
+  
+
+  
+  return(name_changes_rows)
+}
+
+
+when_movie_mode_changed_ext(deviceData)
 ```
 
 ### Paweł ( id = 3)
@@ -435,62 +497,45 @@ deviceData <- deviceData %>%
 
   )
 
-df <- deviceData %>% select_if(~ !any(is.na(.)))
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
 
 
 # Convert the systemTime column to relative time
-df$relative_time <- (df$systemTime - min(df$systemTime)) 
-df <- df[!duplicated(df$relative_time), ]
+deviceData$relative_time <- (deviceData$systemTime - min(deviceData$systemTime)) 
+deviceData <- deviceData[!duplicated(deviceData$relative_time), ]
 
-df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
-df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+deviceData$RightEyePupilSize[deviceData$RightEyePupilSize == -1] <- NA
+deviceData$LeftEyePupilSize[deviceData$LeftEyePupilSize == -1] <- NA
 
 ```
 
-##### Move/mode changed based on DeviceData (VideoName, VideoMode columns)
+##### Movie/mode changed based on DeviceData (VideoName, VideoMode columns)
 
 ```{r}
-# Function that takes deviceData df and returns a frame with rows, when the VideoMode/Video changed 
-when_movie_mode_changed <-function(df) {
-  # Find changes in VideoName
-  name_changes <- c(FALSE, df$VideoName[-1] != df$VideoName[-nrow(df)])
-  # Find changes in VideoMode
-  mode_changes <- c(FALSE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
-  # Combine the two logical vectors
-  changes <- name_changes | mode_changes
-  
-  # Get the indices where changes occur
-  change_indices <- which(changes)
-  
-  changes_rows <- df[change_indices,]
-  return(changes_rows)
-}
-
-#where movie or its mode changed
-movie_mode_change = when_movie_mode_changed(df)[["systemTime"]]
+movie_mode_change = when_movie_mode_changed(deviceData)[["systemTime"]]
 
 print(movie_mode_change)
+```
+
+```{r}
+when_movie_mode_changed_ext(deviceData)
 ```
 
 ##### Segment changed based on DeviceData (Segment Column)
 
 ```{r}
-segment_changed <- df %>%
-  mutate(segment_changed = (SegmentIndex != lag(SegmentIndex))) %>%
-  filter(segment_changed == TRUE)
-
-segment_changed$systemTime
-
+segment_changed <- when_segment_changed(deviceData)
+segment_changed
 ```
 
-##### Segment changed based on  ECG data
+##### Event changed based on  ECG data
 
 ```{r}
 ecgData <- read.csv("data/3_ECG.csv", sep = ",", encoding = "utf-8")
 
-ecgData <- clean_and_add_time_to_ecg(ecgData)
+ecgData <- clean_and_add_time_to_ecg(ecgData,deviceData$systemTime[1])
 
-video_mode_change <- when_event_changed(ecgData)
+event_changed <- when_event_changed(ecgData)
 ```
 
 ##### Comparing all changes (ecg, ET, segment, etc.)
@@ -506,7 +551,7 @@ segment_changed
 df_segment <- data.frame(time = segment_change, event = 'Segment Change')
 df_video_start <- data.frame(time = video_start_ecg, event = 'Video Start ECG')
 df_video_end <- data.frame(time = video_end_ecg, event = 'Video End ECG')
-df_movie_mode <- data.frame(time = movie_mode_change, event = 'Movie Mode Change')
+df_movie_mode <- data.frame(time = movie_mode_change, event = 'Movie Mode  Change')
 
 # Combine the data frames into one
 changes_combined <- rbind(df_segment, df_video_start, df_video_end, df_movie_mode)
@@ -535,7 +580,7 @@ ggplot(df, aes(x = time, y = event, color = event)) +
 ```{r}
 
 # Apply approx function to the pupil size columns
-df <- df %>%
+deviceData <- deviceData %>%
   arrange(relative_time) %>%
   mutate(
     RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
@@ -545,14 +590,14 @@ df <- df %>%
   )
 
 # Create a line plot with smoothing for both eyes
-ggplot(df, aes(x = relative_time)) +
+ggplot(deviceData, aes(x = relative_time)) +
   geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
   geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
   labs(title = "Smoothed Pupil Size Over Time",
        x = "Relative Time", y = "Smoothed Pupil Size",
        color = "Eye") +
   scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))+
-  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+  geom_vline(xintercept = segment_change, color = "darkgreen", size = 0.5, linetype = 4)
 
 ```
 
@@ -560,20 +605,47 @@ ggplot(df, aes(x = relative_time)) +
 
 ```{r}
 # Calculate the average pupil size
-df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+deviceData$average_pupil_size <- rowMeans(deviceData[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
 
 
 # Create a line plot for the average pupil size
 # removed vlines as no spawnData was identified
-ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+ggplot(deviceData, aes(x = relative_time, y = average_pupil_size)) +
   geom_line(color = "purple") +
   labs(title = "Average Pupil Size Over Time",
        x = "Relative Time", y = "Average Pupil Size")+
-  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+  geom_vline(xintercept = segment_change, color = "darkgreen", size = 0.5, linetype = 4)
  # +geom_text(data = changes_rows, aes(x = relative_time, y = 0.0, label = changes_rows$VideoName), 
            # angle = 90, vjust = -0.5, color = "darkgreen", size = 3)
   
 
+```
+
+```{r}
+prepare_dataset <- function(df) {
+  # Convert the Timestamp column to POSIXct (Date-Time format)
+  df$Timestamp <- as.POSIXct(df$Timestamp, format = "%Y-%m-%d %H:%M:%S")
+  
+  # Create a column for Time in seconds relative to the start
+  df$Time <- as.numeric(difftime(df$Timestamp, min(df$Timestamp), units = "secs"))
+  
+  # Identify changes in VideoName and VideoMode
+  name_changes <- c(TRUE, df$VideoName[-1] != df$VideoName[-nrow(df)])
+  mode_changes <- c(TRUE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
+  
+  # Create a START event when a change is detected
+  df_start <- df[name_changes | mode_changes, ]
+
+  # Select relevant columns
+  df_start <- df_start[, c("Time", "VideoName", "VideoMode")]
+  
+  # Sort by time
+  df_combined <- df_start[order(df_start$Time), ]
+  
+  return(df_combined)
+}
+
+prepare_dataset(questionData)
 ```
 
 ##### Code from Paweł (whats that??)
