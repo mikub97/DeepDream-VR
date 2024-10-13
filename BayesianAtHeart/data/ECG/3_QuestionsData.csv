@@ -1,0 +1,19 @@
+Id;Timestamp;Sex;Age;SegmentIndex;VideoName;VideoMode;QuestionIndex;QuestionAnswer;AnswerDuration;VideoRotation;
+1;2024-09-28 15:08:34;Male;30;1;conv2_3x3_6-14-36;NoAnomalies;1;0;1.191574;0
+1;2024-09-28 15:08:39;Male;30;1;conv2_3x3_6-14-36;NoAnomalies;2;0;4.56358;0
+1;2024-09-28 15:09:11;Male;30;2;3a_3x3_6-14-36;OnlyAnomalies;1;0;1.242271;0
+1;2024-09-28 15:09:13;Male;30;2;3a_3x3_6-14-36;OnlyAnomalies;2;0;1.801064;0
+1;2024-09-28 15:09:45;Male;30;3;3b_output_6-14-36;Coupling;1;0;0.7729645;0
+1;2024-09-28 15:09:46;Male;30;3;3b_output_6-14-36;Coupling;2;0;0.5177383;0
+1;2024-09-28 15:10:18;Male;30;4;4a_pool_proj_6-14-36;NoAnomalies;1;0;1.012207;0
+1;2024-09-28 15:10:19;Male;30;4;4a_pool_proj_6-14-36;NoAnomalies;2;0;0.6708679;0
+1;2024-09-28 15:10:51;Male;30;5;4d_output_6-14-36;OnlyAnomalies;1;0;0.6082916;0
+1;2024-09-28 15:10:51;Male;30;5;4d_output_6-14-36;OnlyAnomalies;2;0;0.4457245;0
+1;2024-09-28 15:11:23;Male;30;6;4d_output_6-14-36;Coupling;1;0;0.5029755;0
+1;2024-09-28 15:11:24;Male;30;6;4d_output_6-14-36;Coupling;2;0;1.074829;0
+1;2024-09-28 15:11:56;Male;30;7;4d_pool_6-14-36;NoAnomalies;1;0;1.163757;0
+1;2024-09-28 15:11:57;Male;30;7;4d_pool_6-14-36;NoAnomalies;2;0;0.5457458;0
+1;2024-09-28 15:12:29;Male;30;8;5b_3x3_reduce_6-14-36;OnlyAnomalies;1;0;0.6182556;0
+1;2024-09-28 15:12:29;Male;30;8;5b_3x3_reduce_6-14-36;OnlyAnomalies;2;0;0.467041;0
+1;2024-09-28 15:13:01;Male;30;9;5b_pool_6-14-36;Coupling;1;0;0.7968445;0
+1;2024-09-28 15:13:02;Male;30;9;5b_pool_6-14-36;Coupling;2;0;0.9234314;0

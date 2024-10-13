@@ -1,0 +1,110 @@
+<!--idSurvey: E2-->
+<!--idPerson: K03-->
+<!--scenariosOrder: 0 1 3 2 4 5-->
+<!--scenarioIndex: 3, scenarioId: 2-->
+<questionnaire>
+  <item>
+    <question>Jaki jest Twój poziom stresu w tej chwili?</question>
+    <scale>SUDs</scale>
+    <answer>
+      <text>2</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się radosny?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Ani tak ani nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się pogodny?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Raczej nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się wesoły?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Raczej nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się zadowolony?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Raczej tak</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się odprężony?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Raczej nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się pełen energii?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Zdecydowanie tak</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się opuszczony?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Zdecydowanie nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się samotny?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Zdecydowanie nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się spięty?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Raczej nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się rozdrażniony?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Ani tak ani nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się zaniepokojony?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Zdecydowanie nie</text>
+      <image />
+    </answer>
+  </item>
+  <item>
+    <question>Czy obecnie czujesz się przybity?</question>
+    <scale>affect</scale>
+    <answer>
+      <text>Zdecydowanie nie</text>
+      <image />
+    </answer>
+  </item>
+</questionnaire>

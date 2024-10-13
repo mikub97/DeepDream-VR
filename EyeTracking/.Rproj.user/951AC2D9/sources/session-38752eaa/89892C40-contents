@@ -1,0 +1,732 @@
+---
+title: "Pilot data exploration"
+author: "MW"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load required libraries
+
+```{r setup, include=FALSE}
+
+# Ensure the necessary libraries are loaded
+library(here, warn.conflicts = FALSE, quietly=TRUE)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(RColorBrewer)
+# Interpolate missing values using linear interpolation for both eyes
+library(zoo)
+
+# set working directory
+data_dir <- paste0(here())
+setwd(data_dir)
+```
+
+# Reading files
+
+**Function for generating mock datasets**
+
+```{r }
+
+set.seed(124)
+
+# Function to generate mock data for a participant
+generate_mock_data <- function(participant_id) {
+  data <- data.frame(
+    Id = participant_id,
+    Timestamp = as.character(as.POSIXct("2024-06-19 16:33:40") + seq(0, by = 30, length.out = 48)),
+    Sex = "Male",
+    Age = 19,
+    SegmentIndex = rep(1:12, each = 4),
+    VideoName = rep(c("looped_final", "Train", "Westminster_8k", "NY_octave"), times = 3),
+    VideoMode = rep(c("NoAnomalies", "OnlyAnomalies", "Coupling"), each = 16),
+    QuestionIndex = rep(1:4, times = 12),
+    QuestionAnswer = sample(-4:4, 48, replace = TRUE),
+    AnswerDuration = round(runif(48, 0.1, 50), 7),
+    VideoRotation = rep(0, 48),
+    X = rep("NA", 48)
+  )
+  return(data)
+}
+
+# Create a helper function to handle NA interpolation with leading and trailing NAs
+na_approx_with_padding <- function(x) {
+  # Interpolate only non-NA segments
+  x_approx <- zoo::na.approx(x, na.rm = FALSE)
+  
+  # Replace leading and trailing NAs with original values
+  x_approx[is.na(x_approx)] <- x[is.na(x_approx)]
+  
+  return(x_approx)
+}
+
+
+# Generate mock data   if needed
+#questionData97 <- generate_mock_data(97)
+#questionData98 <- generate_mock_data(98)
+
+```
+
+**Reading the device and question data from all participants**
+
+```{r }
+
+# Initialize lists to store data
+deviceDataList <- list()
+questionDataList <- list()
+
+# Number of participants
+participant_ids <- c(1, 2, 3)
+
+# Loop through each participant
+for (id in participant_ids) {
+  # Generate the file names dynamically
+  deviceFileName <- paste0("data/", id, "_DeviceData.csv")
+  questionFileName <- paste0("data/", id, "_QuestionsData.csv")
+  
+  # Read the CSV files
+  deviceData <- read.csv(deviceFileName, sep = ";", encoding = "utf-8")
+  questionData <- read.csv(questionFileName, sep = ";", encoding = "utf-8")
+  
+  questionData["Id"] <- id
+  # Append the data to the lists
+  if (!is.null(deviceData)) deviceDataList[[length(deviceDataList) + 1]] <- deviceData
+  if (!is.null(questionData)) questionDataList[[length(questionDataList) + 1]] <- questionData
+    
+}
+
+questionData_combined <- bind_rows(questionDataList)
+
+```
+
+### Answers analysis
+
+**Distribution of answers**
+
+```{r }
+
+
+summary(questionData_combined$AnswerDuration)
+
+# Summarize the data
+answers_summary <- questionData_combined %>%
+  group_by(Id, VideoMode, VideoName, QuestionIndex, QuestionAnswer) %>%
+  summarize(Count = n(), .groups = 'drop')
+
+# Display the summary table
+kable(answers_summary[1:10,], caption = "Summary Table of Question Answers by Participant, VideoMode, and VideoName")
+
+# Summarize the average QuestionAnswer for each VideoMode and VideoName
+summary_data <- answers_summary %>%
+  group_by(VideoName, QuestionIndex) %>%
+  summarise(
+    AvgAnswer = mean(QuestionAnswer),
+    AnswerCount = sum(Count)
+  )
+
+# Display the summarized data
+kable(summary_data, caption = "Average QuestionAnswer for each  VideoName")
+
+
+# Plot the distribution of Question Answers by VideoMode
+ggplot(questionData_combined, aes(x=as.factor(QuestionIndex), fill=as.factor(QuestionAnswer))) +
+  geom_bar(position="dodge") +
+  facet_wrap(~ VideoMode) +
+  labs(title="Distribution of Question Answers by VideoMode",
+       x="Question Index",
+       y="Count",
+       fill="Question Answer") +
+  theme_minimal()
+
+# Plot the distribution of Question Answers by VideoName
+ggplot(questionData_combined, aes(x=as.factor(QuestionIndex), fill=as.factor(QuestionAnswer))) +
+  geom_bar(position="dodge") +
+  facet_wrap(~ VideoName) +
+  labs(title="Distribution of Question Answers by VideoName",
+       x="Question Index",
+       y="Count",
+       fill="Question Answer") +
+  theme_minimal()
+
+
+
+```
+
+**Statistical tests of answers**
+
+```{r }
+
+# ANOVA to compare QuestionAnswers across different VideoModes and VideoNames
+anova_result <- aov(QuestionAnswer ~ VideoMode * VideoName, data = answers_summary)
+summary(anova_result)
+
+
+```
+
+### Eye tracking
+
+#### Example 99
+
+```{r }
+deviceData <- read.csv("data/99_DeviceData.csv", sep = ";", encoding = "utf-8")
+
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
+
+### Rename some columns to fit the code from VR_ET_code.Rmd (sent by PM to MW)
+deviceData <- deviceData %>%
+  rename(
+    HMDPosition = DevicePosition,
+    HMDRotation = DeviceRotation,
+    LeftEyeOpenness = LeftEyeOpeness,
+    RightEyeOpenness = RightEyeOpeness,
+    systemTime = ExperimentSecond
+
+  )
+
+#explore the differences in columns, maybe I did skipped some?
+colnames(deviceData)
+
+df <- deviceData %>% select_if(~ !any(is.na(.)))
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) 
+
+df <- df[!duplicated(df$relative_time), ]
+
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+
+# Apply the function to the pupil size columns
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(
+    RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
+    LeftEyePupilSize = na_approx_with_padding(LeftEyePupilSize),
+    smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+    smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA)
+  )
+
+
+#where movie or its mode changed
+movie_changed = where_film_mode_changed(df)
+
+
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))+
+  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+
+
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+# Create a line plot for the average pupil size
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size") +
+    geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+
+  
+
+```
+
+#### Misia
+
+```{r }
+deviceData <- deviceDataList[[1]]
+
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
+
+### Rename some columns to fit the code from VR_ET_code.Rmd (sent by PM to MW)
+deviceData <- deviceData %>%
+  rename(
+    HMDPosition = DevicePosition,
+    HMDRotation = DeviceRotation,
+    LeftEyeOpenness = LeftEyeOpeness,
+    RightEyeOpenness = RightEyeOpeness,
+    systemTime = ExperimentSecond
+
+  )
+
+
+df <- deviceData %>% select_if(~ !any(is.na(.)))
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) 
+df <- df[!duplicated(df$relative_time), ]
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+
+
+# Apply approx function to the pupil size columns
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(
+    RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
+    LeftEyePupilSize = na_approx_with_padding(LeftEyePupilSize),
+    smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+    smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA)
+  )
+
+# Function that takes deviceData df and returns a frame with rows, when the
+# VideoMode/Video changed 
+where_film_mode_changed <-function(df) {
+  # Find changes in VideoName
+  name_changes <- c(FALSE, df$VideoName[-1] != df$VideoName[-nrow(df)])
+  # Find changes in VideoMode
+  mode_changes <- c(FALSE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
+  # Combine the two logical vectors
+  changes <- name_changes | mode_changes
+  
+  # Get the indices where changes occur
+  change_indices <- which(changes)
+  
+  changes_rows <- df[change_indices,]
+  return(changes_rows)
+}
+
+#where movie or its mode changed
+movie_changed = where_film_mode_changed(df)
+
+
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))+
+  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+
+
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+
+
+
+# Create a line plot for the average pupil size
+# removed vlines as no spawnData was identified
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size")+
+  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+ # +geom_text(data = changes_rows, aes(x = relative_time, y = 0.0, label = changes_rows$VideoName), 
+           # angle = 90, vjust = -0.5, color = "darkgreen", size = 3)
+  
+
+
+```
+
+##### Aranging events from ECG
+
+1.  Removing rows with EVENT == 0 from the beginning beginning and the end
+2.  Adding \$system_time to ecgData based on the device data start and the sampling rate
+
+```{r}
+ecgData <- read.csv("data/1_ECG_Misia_main.csv")
+
+clean_and_add_time_to_ecg <- function(ecgData)  {
+  
+  # Find the indices of non-zero EVENT values
+  non_zero_indices <- which(ecgData$EVENT != 0)
+  # Get the first and last index of non-zero values
+  first_non_zero <- min(non_zero_indices)
+  last_non_zero <- max(non_zero_indices)
+  
+  # Subset the dataframe to keep only the rows between the first and last non-zero indices
+  ecgData_cleaned <- ecgData[first_non_zero:last_non_zero, ]
+  
+  
+  baseTime = df$systemTime[1] # the start of vr session
+  
+  sampling_rate <- 1000 # 1000 Hz means 1 sample per millisecond
+  time_increment <- 1/sampling_rate
+  rownames(ecgData_cleaned) <- seq_len(nrow(ecgData_cleaned))
+  
+  ecgData_cleaned$systemTime <- baseTime + seq(0, by = time_increment, length.out = nrow(ecgData_cleaned))
+  return(ecgData_cleaned)
+}
+
+
+ecgData_cleaned <- clean_and_add_time_to_ecg(ecgData)
+```
+
+##### Calculating time from device data
+
+```{r}
+
+when_event_changed <- function(df) {
+    result <- df %>%
+    mutate(video_start = (EVENT == 4 & lag(EVENT) != 4)) %>%
+    mutate(video_end = (EVENT == 8 & lag(EVENT) != 8)) %>%
+    filter(video_start == TRUE |video_end==TRUE)
+  
+  video_start <- result %>%
+    filter(video_start==TRUE)
+  
+  
+  video_end <- result %>%
+    filter(video_end==TRUE)
+  
+  video_start <- video_start$systemTime
+  video_end <- video_end$systemTime
+  
+  print(video_start)  ## this is corresponds to segment change (when new video starts)
+  print(video_end)
+  
+  return(result)
+  
+}
+when_event_changed(ecgData_cleaned)
+
+```
+
+##### Segment change based on deviceData
+
+```{r}
+
+when_segment_changed <- function(df) {
+  result <- df %>%
+    mutate(segment_changed = (SegmentIndex != lag(SegmentIndex))) %>%
+    filter(segment_changed == TRUE)
+  
+  return(result$systemTime)
+}
+when_segment_changed(df)
+```
+
+### Paweł ( id = 3)
+
+```{r}
+deviceData <- deviceDataList[[3]]
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
+
+### Rename some columns to fit the code from VR_ET_code.Rmd (sent by PM to MW)
+deviceData <- deviceData %>%
+  rename(
+    HMDPosition = DevicePosition,
+    HMDRotation = DeviceRotation,
+    LeftEyeOpenness = LeftEyeOpeness,
+    RightEyeOpenness = RightEyeOpeness,
+    systemTime = ExperimentSecond
+
+  )
+
+df <- deviceData %>% select_if(~ !any(is.na(.)))
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) 
+df <- df[!duplicated(df$relative_time), ]
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+```
+
+##### Move/mode changed based on DeviceData (VideoName, VideoMode columns)
+
+```{r}
+# Function that takes deviceData df and returns a frame with rows, when the VideoMode/Video changed 
+when_movie_mode_changed <-function(df) {
+  # Find changes in VideoName
+  name_changes <- c(FALSE, df$VideoName[-1] != df$VideoName[-nrow(df)])
+  # Find changes in VideoMode
+  mode_changes <- c(FALSE, df$VideoMode[-1] != df$VideoMode[-nrow(df)])
+  # Combine the two logical vectors
+  changes <- name_changes | mode_changes
+  
+  # Get the indices where changes occur
+  change_indices <- which(changes)
+  
+  changes_rows <- df[change_indices,]
+  return(changes_rows)
+}
+
+#where movie or its mode changed
+movie_mode_change = when_movie_mode_changed(df)[["systemTime"]]
+
+print(movie_mode_change)
+```
+
+##### Segment changed based on DeviceData (Segment Column)
+
+```{r}
+segment_changed <- df %>%
+  mutate(segment_changed = (SegmentIndex != lag(SegmentIndex))) %>%
+  filter(segment_changed == TRUE)
+
+segment_changed$systemTime
+
+```
+
+##### Segment changed based on  ECG data
+
+```{r}
+ecgData <- read.csv("data/3_ECG.csv", sep = ",", encoding = "utf-8")
+
+ecgData <- clean_and_add_time_to_ecg(ecgData)
+
+video_mode_change <- when_event_changed(ecgData)
+```
+
+##### Comparing all changes (ecg, ET, segment, etc.)
+
+```{r}
+video_start_ecg <- (video_mode_change %>% filter(video_start))$systemTime
+
+video_end_ecg <- (video_mode_change %>% filter(video_end))$systemTime
+
+segment_changed
+
+# Create data frames for each event
+df_segment <- data.frame(time = segment_change, event = 'Segment Change')
+df_video_start <- data.frame(time = video_start_ecg, event = 'Video Start ECG')
+df_video_end <- data.frame(time = video_end_ecg, event = 'Video End ECG')
+df_movie_mode <- data.frame(time = movie_mode_change, event = 'Movie Mode Change')
+
+# Combine the data frames into one
+changes_combined <- rbind(df_segment, df_video_start, df_video_end, df_movie_mode)
+
+```
+
+##### Plotting the time events (all sources)
+
+```{r}
+
+ggplot(df, aes(x = time, y = event, color = event)) +
+  geom_point(size = 3) +
+  geom_vline(xintercept = segment_change, linetype = "dashed", color = "blue", alpha = 0.5) +
+  geom_vline(xintercept = video_start_ecg, linetype = "dotted", color = "green", alpha = 0.5) +
+  geom_vline(xintercept = video_end_ecg, linetype = "solid", color = "red", alpha = 0.5) +
+  geom_vline(xintercept = movie_mode_change, linetype = "longdash", color = "purple", alpha = 0.5) +
+  labs(title = "Time Event Plot", x = "Time (seconds)", y = "Event Type") +
+  theme_minimal() +
+  scale_color_manual(values = c("Segment Change" = "blue", "Video Start ECG" = "green", 
+                                "Video End ECG" = "red", "Movie Mode Change" = "purple")) +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```
+
+##### Smoothed Pupile Size (approx. function)
+
+```{r}
+
+# Apply approx function to the pupil size columns
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(
+    RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
+    LeftEyePupilSize = na_approx_with_padding(LeftEyePupilSize),
+    smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+    smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA)
+  )
+
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))+
+  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+```
+
+##### Average Pupil Size
+
+```{r}
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+
+# Create a line plot for the average pupil size
+# removed vlines as no spawnData was identified
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size")+
+  geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+ # +geom_text(data = changes_rows, aes(x = relative_time, y = 0.0, label = changes_rows$VideoName), 
+           # angle = 90, vjust = -0.5, color = "darkgreen", size = 3)
+  
+
+```
+
+##### Code from Paweł (whats that??)
+
+```{r}
+# Count different VideoMode values
+video_mode_counts <- table(deviceData$VideoMode)
+n_video_modes <- length(video_mode_counts)
+
+# Print summary of VideoMode counts
+print("VideoMode Counts:")
+print(video_mode_counts)
+print(paste("Total number of unique VideoModes:", n_video_modes))
+
+```
+
+```{r}
+# Set up a wide plot area
+par(mar = c(10, 4, 4, 2) + 0.1, mfrow = c(1, 1))
+options(repr.plot.width = 20, repr.plot.height = 12)
+
+# Calculate the y-range for QuestionIndex and SegmentIndex
+y_range <- range(c(deviceData$QuestionIndex, deviceData$SegmentIndex))
+
+# Find points where VideoMode changes
+change_points <- c(1, which(diff(as.numeric(factor(deviceData$VideoMode))) != 0) + 1, nrow(deviceData) + 1)
+
+# Create a color palette for the background
+colors <- colorRampPalette(brewer.pal(8, "Pastel1"))(n_video_modes)
+
+# Create the main plot (empty)
+plot(1, type = "n", 
+     xlim = c(1, nrow(deviceData)), ylim = y_range,
+     xlab = "", ylab = "Value",
+     main = paste("Question Index, Segment Index, and Video Modes\n(", n_video_modes, " unique modes)"),
+     xaxt = "n")
+```
+
+```{r}
+# Add background colors for each VideoMode section
+for (i in 1:(length(change_points) - 1)) {
+  rect(change_points[i], y_range[1], change_points[i+1], y_range[2], 
+       col = alpha(colors[as.numeric(factor(deviceData$VideoMode[change_points[i]]))], 0.3), border = NA)
+}
+
+# Add Question Index and Segment Index lines
+lines(deviceData$QuestionIndex, col = "blue")
+lines(deviceData$SegmentIndex, col = "red")
+
+# Add thicker vertical lines where video mode changes
+abline(v = change_points, col = "darkgreen", lwd = 2)
+
+# Add video modes at change points, alternating above and below
+axis(1, at = change_points[-length(change_points)], labels = FALSE, tick = TRUE)
+for (i in seq_along(change_points[-length(change_points)])) {
+  mode <- deviceData$VideoMode[change_points[i]]
+  label <- paste(mode, " (", video_mode_counts[mode], ")", sep="")
+  if (i %% 2 == 0) {
+    # Even indices: place below
+    text(x = change_points[i], 
+         y = par("usr")[3] - 0.15 * diff(par("usr")[3:4]),
+         labels = label, 
+         srt = 90, adj = 1, xpd = TRUE, cex = 0.7, font = 2)
+  } else {
+    # Odd indices: place above
+    text(x = change_points[i], 
+         y = par("usr")[3] - 0.05 * diff(par("usr")[3:4]),
+         labels = label, 
+         srt = 90, adj = 0, xpd = TRUE, cex = 0.7, font = 2)
+  }
+}
+
+# Add a legend
+legend("topright", 
+       legend = c("Question Index", "Segment Index", "Video Mode Change"),
+       col = c("blue", "red", "darkgreen"), 
+       lty = c(1, 1, 1), 
+       lwd = c(1, 1, 2),
+       cex = 0.8)
+
+# Add x-axis label
+mtext("Row Index", side = 1, line = 8)
+```
+
+### Michał
+
+```{r }
+deviceData <- read.csv("data/2_DeviceData.csv", sep = ";", encoding = "utf-8")
+
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
+
+### Rename some columns to fit the code from VR_ET_code.Rmd (sent by PM to MW)
+deviceData <- deviceData %>%
+  rename(
+    HMDPosition = DevicePosition,
+    HMDRotation = DeviceRotation,
+    LeftEyeOpenness = LeftEyeOpeness,
+    RightEyeOpenness = RightEyeOpeness,
+    systemTime = ExperimentSecond
+
+  )
+
+#explore the differences in columns, maybe I did skipped some?
+colnames(deviceData)
+
+df <- deviceData %>% select_if(~ !any(is.na(.)))
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) 
+
+df <- df[!duplicated(df$relative_time), ]
+
+
+#where movie or its mode changed
+movie_changed = where_film_mode_changed(df)
+
+
+spawnData <- df[df$objectId != "",] # no applicable in this case I guess
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+
+# Apply the function to the pupil size columns
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(
+    RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
+    LeftEyePupilSize = na_approx_with_padding(LeftEyePupilSize),
+    smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+    smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA)
+  )
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))+
+    geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+
+
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+# Create a line plot for the average pupil size
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size")+
+    geom_vline(xintercept = movie_changed$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+```

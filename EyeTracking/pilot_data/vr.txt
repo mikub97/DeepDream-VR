@@ -1,9 +1,0 @@
-Id;
-SegmentIndex;  które video z kolei
-VideoName;  nazwa surowego pliku mp4 (malo informacyjne teraz)
-VideoMode;  Condition
-QuestionIndex; pytanie które z kolei
-1, pytanie odmienność wrażeń wzrokowych
-2,odmienność odczuć
-3, vr presence 1
-4 vr presence 2
