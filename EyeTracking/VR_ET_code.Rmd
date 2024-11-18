@@ -16,7 +16,7 @@ library(dplyr)
 library(zoo)
 library(ggplot2)
 
-path <- "data/"
+path <- "example/"
 
 
 ### Read data from all files present [option 1 - unflexible]

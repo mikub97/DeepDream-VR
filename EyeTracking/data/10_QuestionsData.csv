@@ -1,0 +1,11 @@
+Id;Timestamp;Sex;Age;SegmentIndex;VideoName;VideoMode;QuestionIndex;QuestionAnswer;AnswerDuration;VideoRotation;
+10;2024-10-24 16:27:27;Female;21;1;Low_layer_small_iterations;OnlyAnomalies;1;51;2.045773;0
+10;2024-10-24 16:27:28;Female;21;1;Low_layer_small_iterations;OnlyAnomalies;2;72;1.461502;0
+10;2024-10-24 16:27:29;Female;21;1;Low_layer_small_iterations;OnlyAnomalies;3;50;0.9638901;0
+10;2024-10-24 16:27:30;Female;21;1;Low_layer_small_iterations;OnlyAnomalies;4;50;0.375618;0
+10;2024-10-24 16:27:30;Female;21;1;Low_layer_small_iterations;OnlyAnomalies;5;50;0.4360962;0
+10;2024-10-24 16:29:14;Female;21;2;High_layer_small_iterations;OnlyAnomalies;1;53;15.29555;0
+10;2024-10-24 16:29:15;Female;21;2;High_layer_small_iterations;OnlyAnomalies;2;52;0.6656036;0
+10;2024-10-24 16:29:22;Female;21;2;High_layer_small_iterations;OnlyAnomalies;3;52;7.626205;0
+10;2024-10-24 16:29:24;Female;21;2;High_layer_small_iterations;OnlyAnomalies;4;51;1.263504;0
+10;2024-10-24 16:29:24;Female;21;2;High_layer_small_iterations;OnlyAnomalies;5;50;0.4521942;0

@@ -1,0 +1,232 @@
+---
+title: "Eyetracking Data Analysis Script"
+author: AA & PM
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+chunk_output_type: console
+---
+
+```{r setup, include= T}
+#knitr::opts_chunk$set(fig.show='replace')
+
+library("data.table")
+library(dplyr)
+library(zoo)
+library(ggplot2)
+
+path <- "example/"
+
+
+### Read data from all files present [option 1 - unflexible]
+data_list <- list()
+
+# List all folders
+folders <- c("K01", "K02", "K03", "K04", "K06")
+
+# Iterate over the folders
+for (folder in folders) {
+  # Get the list of CSV files in the current folder
+  file_names <- list.files(path = file.path(path, folder, "GazeLog"), pattern = "\\.csv$", full.names = TRUE)
+  
+  # Iterate over the files
+  for (file_name in file_names) {
+    # Read the CSV file
+    data <- read.csv(file_name, skip = 1, sep = ";", encoding = "utf-8")
+    
+    # Extract the file name without extension
+    file_base_name <- tools::file_path_sans_ext(basename(file_name))
+    
+    # Assign the dataset to a variable with dynamic name
+    assign(file_base_name, data)
+    
+    # Store the dataset in the list
+    data_list[[file_base_name]] <- data
+  }
+}
+
+
+### Read data from a single subject (K1) [OPTION 2: flexible loading & renaming]
+
+dt_list <- list()
+
+# Iterate over the files (searches for combinations of numbers)
+for (i in 0:5) {
+  for (j in 0:5) {
+    # Construct file name
+    file_name <- paste0("E2_K01_0 1 2 3 4 5_", i, "_", j, ".csv")
+    file_path <- paste0(path, "/K01/GazeLog/", file_name)
+    
+    # Check if file exists
+    if (file.exists(file_path)) {
+      # Read the CSV file
+      dt <- read.csv(file_path, skip = 1, sep = ";", encoding = "utf-8")
+      
+      # Assign the dataset to a variable with dynamic name
+      assign(paste0("dt_S1_", i, "_", j), dt)
+      
+      # Store the data set in the list
+      dt_list[[paste0("dt_S1_", i, "_", j)]] <- dt
+    } else {
+      #cat("File not found:", file_path, "\n")
+    }
+  }
+}
+
+rm(dt)
+rm(data)
+
+
+```
+
+**PUPIL SIZE**
+
+```{r }
+
+
+### Read data for single individual (single condition) to run explorations
+
+data <- read.csv(paste0(path, "/K01/GazeLog/E2_K01_0 1 2 3 4 5_3_3.csv"),
+                  skip = 1, sep = ";", encoding = "utf-8")
+df <- data %>% select_if(~ !any(is.na(.)))
+summary(df)
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) / 1000
+
+df <- df[!duplicated(df$relative_time), ]
+
+spawnData <- df[df$objectId != "",]
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+# Interpolate missing values using linear interpolation for both eyes
+
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(RightEyePupilSize = zoo::na.approx(RightEyePupilSize),
+         LeftEyePupilSize = zoo::na.approx(LeftEyePupilSize),
+         smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+         smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA))
+
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))
+
+
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+# Create a line plot for the average pupil size
+library(ggplot2)
+
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size") +
+  geom_vline(xintercept = spawnData$relative_time, color = "darkgreen", size = 0.5, linetype = 4)
+
+
+```
+
+***Device Data (Now do the same, but to the our experiment's data***
+
+```{r }
+deviceData <- read.csv("pilot/99_DeviceData.csv", sep = ";", encoding = "utf-8")
+
+deviceData <- deviceData %>% select_if(~ !any(is.na(.)))
+
+### Rename some columns to fit the code from VR_ET_code.Rmd (sent by PM to MW)
+deviceData <- deviceData %>%
+  rename(
+    HMDPosition = DevicePosition,
+    HMDRotation = DeviceRotation,
+    LeftEyeOpenness = LeftEyeOpeness,
+    RightEyeOpenness = RightEyeOpeness,
+    systemTime = ExperimentSecond
+
+  )
+
+#explore the differences in columns, maybe I did skipped some?
+colnames(exampledata)
+colnames(deviceData)
+
+sym_diff <- function(a,b) setdiff(union(a,b), intersect(a,b))
+
+intersect(colnames(exampledata),colnames(deviceData))
+
+sym_diff(colnames(exampledata),colnames(deviceData))
+
+
+df <- deviceData %>% select_if(~ !any(is.na(.)))
+
+
+# Convert the systemTime column to relative time
+df$relative_time <- (df$systemTime - min(df$systemTime)) 
+
+df <- df[!duplicated(df$relative_time), ]
+
+spawnData <- df[df$objectId != "",] # no applicable in this case I guess
+
+df$RightEyePupilSize[df$RightEyePupilSize == -1] <- NA
+df$LeftEyePupilSize[df$LeftEyePupilSize == -1] <- NA
+
+# Interpolate missing values using linear interpolation for both eyes
+library(zoo)
+
+# Create a helper function to handle NA interpolation with leading and trailing NAs
+na_approx_with_padding <- function(x) {
+  # Interpolate only non-NA segments
+  x_approx <- zoo::na.approx(x, na.rm = FALSE)
+  
+  # Replace leading and trailing NAs with original values
+  x_approx[is.na(x_approx)] <- x[is.na(x_approx)]
+  
+  return(x_approx)
+}
+
+# Apply the function to the pupil size columns
+df <- df %>%
+  arrange(relative_time) %>%
+  mutate(
+    RightEyePupilSize = na_approx_with_padding(RightEyePupilSize),
+    LeftEyePupilSize = na_approx_with_padding(LeftEyePupilSize),
+    smoothed_right_pupil_size = zoo::rollmean(RightEyePupilSize, k = 180, fill = NA),
+    smoothed_left_pupil_size = zoo::rollmean(LeftEyePupilSize, k = 180, fill = NA)
+  )
+# Create a line plot with smoothing for both eyes
+ggplot(df, aes(x = relative_time)) +
+  geom_line(aes(y = smoothed_right_pupil_size), color = "blue", na.rm = TRUE) +
+  geom_line(aes(y = smoothed_left_pupil_size), color = "red", na.rm = TRUE) +
+  labs(title = "Smoothed Pupil Size Over Time",
+       x = "Relative Time", y = "Smoothed Pupil Size",
+       color = "Eye") +
+  scale_color_manual(values = c("Right Eye" = "blue", "Left Eye" = "red"))
+
+
+# Calculate the average pupil size
+df$average_pupil_size <- rowMeans(df[, c("smoothed_right_pupil_size", "smoothed_left_pupil_size")], na.rm = TRUE)
+
+# Create a line plot for the average pupil size
+# removed vlines as no spawnData was identified
+ggplot(df, aes(x = relative_time, y = average_pupil_size)) +
+  geom_line(color = "purple") +
+  labs(title = "Average Pupil Size Over Time",
+       x = "Relative Time", y = "Average Pupil Size") +
+ # geom_vline(xintercept = spawnData$relative_time, color = "darkgreen", size = 0.5, linetype = 4
+  )
+
+
+
+```
+
+
+
