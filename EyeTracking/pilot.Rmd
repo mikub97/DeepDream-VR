@@ -111,20 +111,20 @@ custom_colors <- c(
   "Normal" = "#464640"         # RGB(70, 70, 64)
 )
 
-ggplot(summary_data, aes(x = VideoMode, y = Mean_Answer, fill = VideoName)) +
+ggplot(summary_data, aes(x = VideoMode, y = Mean_Answer)) +
   geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
   geom_errorbar(aes(ymin = Mean_Answer - SD_Answer, ymax = Mean_Answer + SD_Answer), 
                 position = position_dodge(width = 0.8), width = 0.2) +
   scale_fill_manual(values = custom_colors) + # Apply custom colors
   theme_minimal() +
   labs(
-    title = "Mean Question Answer by VideoMode and VideoName",
+    title = "Mean Question Answer by VideoMode",
     x = "Video Mode",
     y = "Mean Question Answer"
   )
 
 
-ggplot(questionData_combined, aes(x = VideoMode, y = QuestionAnswer, fill = VideoMode)) +
+ggplot(questionData_combined, aes(x = VideoMode, y = QuestionAnswer)) +
   geom_boxplot() +
   scale_fill_manual(values = custom_colors) + # Apply custom colors
   theme_minimal() +
