@@ -23,13 +23,17 @@ library(RColorBrewer)
 library(zoo)
 
 # set working directory
-data_dir <- paste0(here())
+data_dir <- paste0(here("../data/grudzien"))
 setwd(data_dir)
 ```
 
 # Reading files
 
-**Function for generating mock datasets**
+Convert .acq files to csv with <https://colab.research.google.com/drive/1AaV8sp5v9tvg9pZtmw6pQNMhX9JERS4g?usp=sharing>
+
+Save them to
+
+**Na approx with padding**
 
 ```{r }
 # Create a helper function to handle NA interpolation with leading and trailing NAs
@@ -45,12 +49,6 @@ na_approx_with_padding <- function(x) {
 
 ```
 
-**Reading the device and question data from all participants**
-
-### Answers analysis
-
-**Distribution of answers**
-
 ```{r }
 
 # Initialize lists to store data
@@ -58,13 +56,13 @@ deviceDataList <- list()
 questionDataList <- list()
 
 # Number of participants
-participant_ids <- c(44)
+participant_ids <- c(1)
 
 # Loop through each participant
 for (id in participant_ids) {
   # Generate the file names dynamically
-  deviceFileName <- paste0("data/", id, "_DeviceData.csv")
-  questionFileName <- paste0("data/", id, "_QuestionsData.csv")
+  deviceFileName <- paste0(id, "_DeviceData.csv")
+  questionFileName <- paste0(id, "_QuestionsData.csv")
   
   # Read the CSV files
   deviceData <- read.csv(deviceFileName, sep = ";", encoding = "utf-8")
@@ -76,6 +74,11 @@ for (id in participant_ids) {
   if (!is.null(questionData)) questionDataList[[length(questionDataList) + 1]] <- questionData
     
 }
+```
+
+# Question Analysis
+
+```{r }
 
 questionData_combined <- bind_rows(questionDataList)
 
@@ -134,12 +137,6 @@ ggplot(questionData_combined, aes(x = VideoMode, y = QuestionAnswer)) +
     y = "Question Answer"
   )
 
-
-```
-
-**Statistical tests of answers**
-
-```{r }
 
 # ANOVA to compare QuestionAnswers across different VideoModes and VideoNames
 anova_result <- aov(QuestionAnswer ~ VideoMode * VideoName, data = answers_summary)
